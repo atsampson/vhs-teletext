@@ -4,7 +4,33 @@ import os
 import sys
 import struct
 
+CHARS = " .,oO0#"
+class Histogram:
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.bins = [0] * 64
+        self.count = 0
+
+    def show(self):
+        most = max(self.bins)
+        if most == 0:
+            most = 1
+        scale = float(len(CHARS) - 1) / most
+        sys.stderr.write("".join(CHARS[int(0.5 + (scale * v))] for v in self.bins) + "\n")
+        self.reset()
+
+    def add(self, s):
+        for c in s:
+            self.bins[ord(c) / 4] += 1
+        self.count += 1
+        if self.count == 10:
+            self.show()
+
 def main():
+
+    hist = Histogram()
 
     vbi = os.open(sys.argv[1], os.O_RDONLY)
 
@@ -14,6 +40,8 @@ def main():
 
     while True:
       sys.stdout.write(data)
+
+      hist.add(data)
 
       data = os.read(vbi,2048*32)
       seq, = struct.unpack('<I', data[-4:])
