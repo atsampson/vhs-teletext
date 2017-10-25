@@ -1,32 +1,51 @@
 #!/usr/bin/env python
 
+import numpy as np
 import os
 import sys
 import struct
 
+U8_TYPE = np.dtype('B')
+U32_TYPE = np.dtype('u4')
+BINS = 64
+PERIOD = 10
+CHARS = " .,oO0#"
+
 def main():
+    vbi = open(sys.argv[1], 'rb')
 
-    vbi = os.open(sys.argv[1], os.O_RDONLY)
-
-    data = os.read(vbi,2048*32)
-    prev_seq, = struct.unpack('<I', data[-4:])
+    cumulative = np.zeros(BINS)
+    prev_seq = None
+    frames = 0
     dropped = 0
 
     while True:
-      sys.stdout.write(data)
+        data = np.fromfile(vbi, U8_TYPE, 2048 * 32)
 
-      data = os.read(vbi,2048*32)
-      seq, = struct.unpack('<I', data[-4:])
+        seq = data.view(U32_TYPE)[-1]
+        if prev_seq is not None and seq != (prev_seq + 1):
+            dropped += 1
+            sys.stderr.write('Frame drop? %d\n' % dropped)
+        prev_seq = seq
 
-      if seq != (prev_seq + 1):
-          dropped += 1
-          sys.stderr.write('Frame drop? %d\n' % dropped)
+        data.tofile(sys.stdout)
 
-      prev_seq = seq
+        cumulative += np.histogram(data, bins=BINS, range=(0, 255))[0]
 
+        frames += 1
+        if frames == 10:
+            # Scale the bin counts into an index into CHARS.
+            most = np.amax(cumulative)
+            if int(most) == 0:
+                most = 1.0
+            scale = float(len(CHARS) - 1) / most
+            cumulative *= scale
+            cumulative += 0.5
 
+            sys.stderr.write("".join(CHARS[n] for n in np.nditer(cumulative.astype(U32_TYPE))) + "\n")
 
+            frames = 0
+            cumulative = np.zeros(BINS)
 
-
-
-if __name__ == '__main__': main()
+if __name__ == '__main__':
+    main()
